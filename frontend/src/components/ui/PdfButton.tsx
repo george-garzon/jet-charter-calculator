@@ -2,7 +2,7 @@
 type Props = { payload: any };
 export default function PdfButton({ payload }: Props) {
     const onClick = async () => {
-        const r = await fetch("/api/quote.pdf", {
+        const r = await fetch("/api/quote-pdf", {
             method: "POST", headers: {"Content-Type":"application/json"},
             body: JSON.stringify(payload),
         });
