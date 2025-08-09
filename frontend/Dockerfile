@@ -1,10 +1,6 @@
-FROM node:20-bullseye
-
+# Stage 1: Build
+FROM node:20-alpine as builder
 WORKDIR /app
-COPY package*.json ./
-RUN npm install
-
-# Copy only to allow hot-reload via volume; this is a fallback if volume not mounted
 COPY . .
-
-EXPOSE 3000
+RUN npm install
+RUN npm run build
