@@ -1,0 +1,42 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file:
+      - ./backend/.env
+    environment:
+      # Make Django listen on all interfaces in the container
+      - DJANGO_SETTINGS_MODULE=core.settings
+    command: >
+      bash -lc "
+        python -m pip install --no-cache-dir -r requirements.txt &&
+        python manage.py migrate &&
+        python manage.py runserver 0.0.0.0:8000
+      "
+    volumes:
+      - ./backend:/app
+    working_dir: /app
+    ports:
+      - "8000:8000"
+    depends_on: []
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web   # ← change to ./frontend if that's your folder name
+      dockerfile: Dockerfile
+    environment:
+      - NEXT_PUBLIC_API_BASE=http://api:8000/api
+    command: npm run dev
+    volumes:
+      - ./web:/app         # ← change to ./frontend if needed
+      - /app/node_modules  # keep container node_modules separate
+    working_dir: /app
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    restart: unless-stopped
