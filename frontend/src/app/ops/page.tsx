@@ -4,6 +4,11 @@ import { useMemo, useState } from "react";
 
 type Aircraft = { tail: string; position: string };
 type Leg = { id: string; start: string; end: string; etd?: string; eta?: string };
+type OptimizerResponse = {
+    error?: string;
+    assignment?: Record<string, string[]>;
+    objective_nm?: number;
+};
 
 export default function OpsPage() {
     const [aircraft, setAircraft] = useState(
@@ -15,30 +20,40 @@ export default function OpsPage() {
 {"id":"L2","start":"KVNY","end":"KLAS","etd":"2025-08-10T11:00:00Z","eta":"2025-08-10T12:00:00Z"}
 ]`
     );
-    const [result, setResult] = useState<any>(null);
-    const [error, setError] = useState("");
+    const [result, setResult] = useState<OptimizerResponse | null>(null);
+    const [error, setError] = useState<string>("");
 
     const parsedAircraft = useMemo<Aircraft[] | null>(() => {
-        try { return JSON.parse(aircraft); } catch { return null; }
+        try {
+            return JSON.parse(aircraft) as Aircraft[];
+        } catch {
+            return null;
+        }
     }, [aircraft]);
 
     const parsedLegs = useMemo<Leg[] | null>(() => {
-        try { return JSON.parse(legs); } catch { return null; }
+        try {
+            return JSON.parse(legs) as Leg[];
+        } catch {
+            return null;
+        }
     }, [legs]);
 
     async function run() {
-        setError(""); setResult(null);
+        setError("");
+        setResult(null);
         try {
             const r = await fetch("/api/optimizer/run", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ aircraft: parsedAircraft, legs: parsedLegs }),
             });
-            const json = await r.json();
+            const json = (await r.json()) as OptimizerResponse;
             if (!r.ok || json.error) setError(json.error || "Optimizer error");
             else setResult(json);
-        } catch (e: any) {
-            setError(e.message || "Network error");
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : "Network error";
+            setError(msg);
         }
     }
 
@@ -99,7 +114,6 @@ export default function OpsPage() {
 
     return (
         <main className="max-w-6xl mx-auto p-6 space-y-5 text-white min-h-screen">
-
             <header className="flex items-start justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-semibold">Operations Optimizer</h1>
@@ -123,9 +137,7 @@ export default function OpsPage() {
                                 onChange={(e) => setAircraft(e.target.value)}
                             />
                             <p className="text-xs text-[#A3A3A3] mt-1">
-                                {parsedAircraft
-                                    ? `${parsedAircraft.length} aircraft loaded`
-                                    : "Invalid JSON"}
+                                {parsedAircraft ? `${parsedAircraft.length} aircraft loaded` : "Invalid JSON"}
                             </p>
                         </div>
 
@@ -137,20 +149,28 @@ export default function OpsPage() {
                                 onChange={(e) => setLegs(e.target.value)}
                             />
                             <p className="text-xs text-[#A3A3A3] mt-1">
-                                {parsedLegs
-                                    ? `${parsedLegs.length} legs loaded`
-                                    : "Invalid JSON"}
+                                {parsedLegs ? `${parsedLegs.length} legs loaded` : "Invalid JSON"}
                             </p>
                         </div>
                     </div>
 
                     {/* SAMPLE BUTTONS */}
                     <div className="flex flex-wrap gap-2">
-                        <button onClick={loadTinySample} className="px-3 py-1 border rounded-lg">Tiny Sample</button>
-                        <button onClick={loadCoastToCoast} className="px-3 py-1 border rounded-lg">Coast to Coast</button>
-                        <button onClick={loadMultiLegShuttle} className="px-3 py-1 border rounded-lg">Multi-Leg Shuttle</button>
-                        <button onClick={loadEuropeTour} className="px-3 py-1 border rounded-lg">Europe Tour</button>
-                        <button onClick={loadBusyFleet} className="px-3 py-1 border rounded-lg">Busy Fleet</button>
+                        <button onClick={loadTinySample} className="px-3 py-1 border rounded-lg">
+                            Tiny Sample
+                        </button>
+                        <button onClick={loadCoastToCoast} className="px-3 py-1 border rounded-lg">
+                            Coast to Coast
+                        </button>
+                        <button onClick={loadMultiLegShuttle} className="px-3 py-1 border rounded-lg">
+                            Multi-Leg Shuttle
+                        </button>
+                        <button onClick={loadEuropeTour} className="px-3 py-1 border rounded-lg">
+                            Europe Tour
+                        </button>
+                        <button onClick={loadBusyFleet} className="px-3 py-1 border rounded-lg">
+                            Busy Fleet
+                        </button>
                     </div>
 
                     <button
@@ -182,7 +202,7 @@ export default function OpsPage() {
                         <pre className="text-xs mt-1 bg-[#171717] p-2 rounded-md overflow-auto">
 {`aircraft: [{ tail: string, position: ICAO }]
 legs:     [{ id: string, start: ICAO, end: ICAO, etd?: ISO8601, eta?: ISO8601 }]`}
-                        </pre>
+            </pre>
                     </details>
                 </aside>
             </section>
@@ -193,7 +213,7 @@ legs:     [{ id: string, start: ICAO, end: ICAO, etd?: ISO8601, eta?: ISO8601 }]
                 <section className="border border-[#2a2a2a] bg-[#1f1f1f] rounded-xl p-4 space-y-3">
                     <h2 className="font-medium">Results</h2>
                     <p className="text-sm text-[#A3A3A3]">
-                        Objective (total reposition NM): <b>{Number(result.objective_nm).toFixed(1)}</b>
+                        Objective (total reposition NM): <b>{Number(result.objective_nm ?? 0).toFixed(1)}</b>
                     </p>
 
                     <div className="overflow-x-auto">
@@ -205,17 +225,20 @@ legs:     [{ id: string, start: ICAO, end: ICAO, etd?: ISO8601, eta?: ISO8601 }]
                             </tr>
                             </thead>
                             <tbody>
-                            {Object.entries(result.assignment || {}).map(([tail, legIds]: any) => (
+                            {Object.entries(result.assignment ?? {}).map(([tail, legIds]) => (
                                 <tr key={tail} className="align-top">
                                     <td className="sticky left-0 bg-[#171717] border-b p-2 font-medium">{tail}</td>
                                     <td className="border-b p-2">
                                         {Array.isArray(legIds) && legIds.length ? (
                                             <ul className="list-disc list-inside">
-                                                {legIds.map((id: string) => {
-                                                    const leg = parsedLegs?.find(l => l.id === id);
+                                                {legIds.map((id) => {
+                                                    const leg = parsedLegs?.find((l) => l.id === id);
                                                     return (
                                                         <li key={id}>
-                                                            <code>{id}</code>{leg ? <span className="text-[#A3A3A3]"> — {leg.start} → {leg.end}</span> : null}
+                                                            <code>{id}</code>
+                                                            {leg ? (
+                                                                <span className="text-[#A3A3A3]"> — {leg.start} → {leg.end}</span>
+                                                            ) : null}
                                                         </li>
                                                     );
                                                 })}
@@ -233,8 +256,8 @@ legs:     [{ id: string, start: ICAO, end: ICAO, etd?: ISO8601, eta?: ISO8601 }]
                     <details>
                         <summary className="cursor-pointer text-sm text-[#A3A3A3]">Raw JSON</summary>
                         <pre className="text-xs overflow-auto bg-[#171717] p-2 rounded-md">
-                            {JSON.stringify(result, null, 2)}
-                        </pre>
+              {JSON.stringify(result, null, 2)}
+            </pre>
                     </details>
                 </section>
             )}

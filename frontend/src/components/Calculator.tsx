@@ -7,11 +7,9 @@ import MarginChips from "./ui/MarginChips";
 import ResultPanel from "./ResultPanel";
 import { getJSON, postJSON } from "@/lib/api";
 import { Checkbox } from "@/components/ui/checkbox";
+import type { Catalog, PricePayload, PriceResult } from "@/types";
 
-type Catalog = {
-    airports: { icao: string; fees: number; rwy: number }[];
-    jets: { category: string; model: string }[];
-};
+type CalcState = { res: PriceResult; payload: PricePayload } | null;
 
 export default function Calculator() {
     const [catalog, setCatalog] = useState<Catalog | null>(null);
@@ -30,7 +28,7 @@ export default function Calculator() {
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
-    const [data, setData] = useState<any>(null);
+    const [data, setData] = useState<CalcState>(null);
     const [useML, setUseML] = useState(true);
 
     useEffect(() => {
@@ -41,12 +39,15 @@ export default function Calculator() {
                 setCategory(c.jets[0].category);
                 setModel(c.jets[0].model);
             }
-        })().catch(err => setError(err.message));
+        })().catch((err: unknown) => {
+            const msg = err instanceof Error ? err.message : "Failed to load catalog";
+            setError(msg);
+        });
     }, []);
 
     const categories = useMemo(() => {
         const map = new Map<string, string[]>();
-        catalog?.jets.forEach(j => {
+        catalog?.jets.forEach((j) => {
             if (!map.has(j.category)) map.set(j.category, []);
             map.get(j.category)!.push(j.model);
         });
@@ -59,8 +60,11 @@ export default function Calculator() {
     }, [category, categories, model]);
 
     async function calculate() {
-        setLoading(true); setError(""); setData(null);
-        const payload = {
+        setLoading(true);
+        setError("");
+        setData(null);
+
+        const payload: PricePayload = {
             depart_icao: depart,
             arrive_icao: arrive,
             jet_model: model,
@@ -71,13 +75,15 @@ export default function Calculator() {
             oat_c_depart: oatDep,
             oat_c_arrive: oatArr,
         };
+
         try {
             const endpoint = useML ? "/api/price-ml" : "/api/price";
-            const res = await postJSON<any>(endpoint, payload);
+            const res = await postJSON<PriceResult>(endpoint, payload);
             if (res.error) setError(res.error);
             else setData({ res, payload });
-        } catch (e:any) {
-            setError(e.message || "Network error");
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : "Network error";
+            setError(msg);
         } finally {
             setLoading(false);
         }
@@ -88,26 +94,48 @@ export default function Calculator() {
     return (
         <div className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-[#A3A3A3]">
-                <SelectField label="From (ICAO)" value={depart} onChange={e=>setDepart(e.target.value)}>
-                    {catalog.airports.map(a => <option key={a.icao} value={a.icao}>{a.icao}</option>)}
+                <SelectField label="From (ICAO)" value={depart} onChange={(e) => setDepart(e.target.value)}>
+                    {catalog.airports.map((a) => (
+                        <option key={a.icao} value={a.icao}>
+                            {a.icao}
+                        </option>
+                    ))}
                 </SelectField>
-                <SelectField label="To (ICAO)" value={arrive} onChange={e=>setArrive(e.target.value)}>
-                    {catalog.airports.map(a => <option key={a.icao} value={a.icao}>{a.icao}</option>)}
+                <SelectField label="To (ICAO)" value={arrive} onChange={(e) => setArrive(e.target.value)}>
+                    {catalog.airports.map((a) => (
+                        <option key={a.icao} value={a.icao}>
+                            {a.icao}
+                        </option>
+                    ))}
                 </SelectField>
-                <SelectField label="Jet Class" value={category} onChange={e=>setCategory(e.target.value)}>
-                    {[...categories.keys()].map(c => <option key={c} value={c}>{c}</option>)}
+                <SelectField label="Jet Class" value={category} onChange={(e) => setCategory(e.target.value)}>
+                    {[...categories.keys()].map((c) => (
+                        <option key={c} value={c}>
+                            {c}
+                        </option>
+                    ))}
                 </SelectField>
-                <SelectField label="Jet Model" value={model} onChange={e=>setModel(e.target.value)}>
-                    {(categories.get(category) || []).map(m => <option key={m} value={m}>{m}</option>)}
+                <SelectField label="Jet Model" value={model} onChange={(e) => setModel(e.target.value)}>
+                    {(categories.get(category) || []).map((m) => (
+                        <option key={m} value={m}>
+                            {m}
+                        </option>
+                    ))}
                 </SelectField>
             </div>
 
             <div className="grid md:grid-cols-2 gap-3">
-                <SliderField label="Avg Wind (kts)" value={avgWind} min={-50} max={50}
-                             onChange={setAvgWind} hint="Headwind positive, tailwind negative" />
+                <SliderField
+                    label="Avg Wind (kts)"
+                    value={avgWind}
+                    min={-50}
+                    max={50}
+                    onChange={setAvgWind}
+                    hint="Headwind positive, tailwind negative"
+                />
                 <div className="space-y-3 border rounded-xl p-3">
                     <SliderField label="Margin %" value={margin} min={0} max={60} step={1} onChange={setMargin} />
-                    <MarginChips set={setMargin}/>
+                    <MarginChips set={setMargin} />
                 </div>
             </div>
 
@@ -153,16 +181,16 @@ export default function Calculator() {
                 />
             </div>
 
-
             <div className="flex items-center gap-3">
-                <button onClick={calculate} disabled={loading} className="border rounded-lg px-4 py-2 hover:bg-gray-50 hover:text-[#191919]">
-                {loading ? "Calculating…" : "Calculate Price"}
+                <button
+                    onClick={calculate}
+                    disabled={loading}
+                    className="border rounded-lg px-4 py-2 hover:bg-gray-50 hover:text-[#191919] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    {loading ? "Calculating…" : "Calculate Price"}
                 </button>
                 <label className="text-sm flex items-center gap-2">
-                    <Checkbox
-                        checked={useML}
-                        onCheckedChange={(checked) => setUseML(Boolean(checked))}
-                    />
+                    <Checkbox checked={useML} onCheckedChange={(checked) => setUseML(Boolean(checked))} />
                     Include ML prediction
                 </label>
                 {error && <span className="text-red-600 text-sm">{error}</span>}
