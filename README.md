@@ -1,3 +1,8 @@
+![hero](JetCalc.png)
+
+![hero](OperationsOptimizer.png)
+
+
 # ✈️ Private Jet Price & Ops Optimizer
 
 A full-stack **Django + Next.js 15** application that:
